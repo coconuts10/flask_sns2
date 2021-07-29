@@ -1,0 +1,25 @@
+{% from "_formhelpers.html" import render_field %}
+{% extends "base.html" %}
+{% block title %}
+ログイン - {{ super() }} <!--super()では、親クラスのコンストラクタを呼び出す。コンストラクタとは、メソッドを呼び出した時に実行される関数。
+一般的には__init()__を利用される。-->
+{% endblock %}
+{% block content %}
+{% for message in get_flashed_messages() %}
+{{ message }}
+{% endfor %}
+    <div class="row">
+        <form method="POST">
+            {{ form.csrf_token }}   <!--csrfはログインしたサイト(標的対象)を開きながら別の問題のあるサイトを開いた場合、
+                                     標的対象にて攻撃者が操作してしまう。crsf_tokenではこれを防ぐための設定。
+                                    -->
+            {{ render_field(form.email) }}  <!--views.pyで取得したformの項目を掲載させる-->
+            {{ render_field(form.password) }}
+            {{ render_field(form.confirm_password) }}
+            {{ form.submit() }}
+        </form>
+        <a href="{{url_for('app.forgot_password')}}">
+            パスワードを忘れた場合
+        </a>
+    </div>
+{% endblock %}

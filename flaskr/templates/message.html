@@ -1,0 +1,105 @@
+{% from "_formhelpers.html" import render_field %}
+{% extends "base.html" %}
+{% block title %}
+メッセージ画面 - {{super() }}
+{% endblock %}
+{% block content %}
+<!--JavaScriptでの記入-->
+<script>        //Javascriptはブラウザ内のスクリプト言語
+                //jqueryはJavascriptで構築されたライブラリ/フレームワーク
+                //AjaxはページをリロードすることなくUI部分を動的に更新する方法
+    $(function(){   //$(function()はHTMLの読み込みを待ってから実行するという予約待機を行うもの。
+                    //通常htmlは上から順番に読み込まれるため、HTML完了する前にJavascriptを書いてしまうと、関数が実行されない。そのためこの記述が必要。
+        //5000ミリ間隔でget_new_messagesを実行
+        timer = setInterval("get_new_messages()", 5000);
+        //初期表示画面の一番下に行く
+        var scroll = (document.scrollingElement || document.body);
+        scroll.scrollTop = scroll.scrollHeight;
+    });
+    user_id ="{{ to_user_id }}";    //jinjaでユーザーIDを取得する。@bp.route('/message/<id>', methods=['GET', 'POST'])のrender_templateでto_user_idが渡されている。
+    offset_value=1;
+    function get_new_messages(){
+        $.getJSON("/message_ajax", {    //getJSONでAjaxでサーバー側にリクエストを送る。
+                                        //jQueryオブジェクトの参照を保持する変数であることをわかりやすくするため、$で始まる変数名にしている。
+                                        //→処理として$が何らかの意味を持っているわけではない。
+           user_id: user_id
+        }, function(data){
+            $('#message-form').before(data['data']);    //#でID指定した値が入ってくる。今回のIDはmessage-form
+                                                        //data['data']の'data'の部分がviews.pyのjsonifyの戻り値から受け取った引数。
+                                                        ///message_ajaxが取得先のURLとなりそこに問合せに行く。
+                                                        //user_idでmessage_ajaxにユーザーIDを飛ばす。
+            var checked_message_ids =　data['checked_message_ids'] //views.pyのjsonifyからの戻り値checked_message_ids
+            for(let idx = 0; idx < checked_message_ids.length; idx++){
+                $('#self-message-tag-'+checked_message_ids[idx]).append('<p>既読</P>');   //既読がついていないメッセージIDに既読をつける処理。
+            }
+        });
+     };
+     function load_old_messages(){
+        $.getJSON("/load_old_messages",{
+            user_id: user_id,
+            offset_value: offset_value
+        }, function(data){
+            if(data['data']){
+                hidden_id = "load_message_" + offset_value;
+                hidden_tag = '<div id="' + hidden_id + '"></dvi>'
+                $(hidden_tag).insertAfter('#load_message_button');
+                $(data['data']).insertAfter('#load_message_button') //hidden_tagが読み込まれて、そのあとにメッセージが読み込まれる。
+                                                                    //→下からload_message_button、hidden_tag、oldメッセージという順番となっている。
+                                                                    //→hidden_tagの場所にスクロールするようにすれば、oldメッセージの中の一番新しいメッセージから読める。
+                $('body, html').animate({scrollTop: $("#" + hidden_id).offset().top}, 0);   //hidden_tagの場所に移動する。
+                offset_value += 1;
+            }
+        });
+     };
+</script>
+<div class="row">
+    <div id="load_message_button" class="col-12">
+        <button class="col-12 btn btn-light btn-outline-primary" onclick="load_old_messages();">100件読み込む</button>
+    </div>
+    {% for message in messages|reverse %} <!--読み取ったメッセージはdescで逆順になっているので正しい順序にするためにreverseを使う。-->
+        {% if message.from_user_id == current_user.id %}
+        <div id="self-message-tag-{{message.id}}" class="col-lg-1 offset-lg-6 col-md-2 col-sm-1 offset-sm-1 col-1">
+            <!--offsetにより左側に空白を入れる-->
+            <!--col-lg：最大の画面、col-md：中くらいの画面,col-sm：小さい画面、col：最小の画面
+            col-lgやcol-smとあるが、このカテゴリに応じて、コンテナ（HTML上のタグの幅の範囲が決められる）-->
+            {% if message.is_checked %}
+            <P>既読</P>
+            {% endif %}
+        </div>
+        <div class="speech-bubble-self col-lg-4 col-md-8 col-sm-8 col-9">
+            {% for splitted_message in message.message|replace_newline %}
+                <p>{{splitted_message|urlize}}</p>  <!--urlizeを入れることでURLをハイパーリンクにする-->
+            {% endfor %}
+        </div>
+        <div class="col-lg-1 col-md-1 col-sm-2 col-2">
+            {% if current_user.picture_path %}
+                <img class="user-image-mini" src="{{url_for('static', filename=current_user.picture_path)}}">
+            {% endif %}
+            <p>{{current_user.username}}</p>
+        </div>
+        {% else %}
+        <div class="col-lg-1 col-md-1 col-sm-2 col-2">
+            {% if user.picture_path %}
+                <img class="user-image-mini" src="{{url_for('static', filename=user.picture_path)}}">
+            {% endif %}
+            <p>{{user.username}}</p>
+        </div>
+        <div class="speech-bubble-dest col-lg-4 col-md-8 col-sm-8 col-9">
+            {% for splitted_message in message.message|replace_newline %}
+                <p>{{splitted_message|urlize}}</p>  <!--urlizeを入れることでURLをハイパーリンクにする-->
+            {% endfor %}
+        </div>
+        <div class="col-lg-7 col-md-3 col-sm-1 col-1">
+        </div>
+        {% endif %}
+    {% endfor %}
+    <div id="message-form" class="col-lg-4 offset-lg-7 col-md-8 offset-md-4 col-sm-12 col-12">
+        <form method="POST">
+            {{ form.csrf_token }}
+            {{ form.to_user_id(value=to_user_id) }}
+            {{ render_field(form.message, cols="50", rows="5") }}　<!--横に50文字、縦に5文字-->
+            {{ form.submit() }}
+        </form>
+    </div>
+</div>
+{% endblock %}
